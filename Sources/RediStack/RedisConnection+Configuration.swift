@@ -16,6 +16,7 @@ import Atomics
 import NIOCore
 import NIOConcurrencyHelpers
 import NIOPosix
+import NIOSSL
 import Logging
 import struct Foundation.URL
 import protocol Foundation.LocalizedError
@@ -59,6 +60,8 @@ extension RedisConnection {
         public let initialDatabase: Int?
         /// The logger prototype that will be used by the connection by default when generating logs.
         public let defaultLogger: Logger
+        /// Connect using an SSL handler
+        public let tlsConfiguration: TLSConfiguration?
 
         internal let address: SocketAddress
 
@@ -71,13 +74,15 @@ extension RedisConnection {
         ///       Redis by default opens connections against index `0`, so only set this value if the desired default is not `0`.
         ///     - `defaultLogger`: The optional prototype logger to use as the default logger instance when generating logs from the connection.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
+        ///     - `tlsConfiguration`: The optional TLS configuration to use for the connection. The default is `nil`.
         /// - Throws: `RedisConnection.Configuration.ValidationError` if invalid arguments are provided.
         public init(
             address: SocketAddress,
             username: String? = nil,
             password: String? = nil,
             initialDatabase: Int? = nil,
-            defaultLogger: Logger? = nil
+            defaultLogger: Logger? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
         ) throws {
             if initialDatabase != nil && initialDatabase! < 0 {
                 throw ValidationError.outOfBoundsDatabaseID
@@ -87,6 +92,7 @@ extension RedisConnection {
             self.username = username
             self.password = password
             self.initialDatabase = initialDatabase
+            self.tlsConfiguration = tlsConfiguration
             self.defaultLogger = defaultLogger ?? Configuration.defaultLogger
         }
 
@@ -98,19 +104,22 @@ extension RedisConnection {
         ///       Redis by default opens connections against index `0`, so only set this value if the desired default is not `0`.
         ///     - `defaultLogger`: The optional prototype logger to use as the default logger instance when generating logs from the connection.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
+        ///     - `tlsConfiguration`: The optional TLS configuration to use for the connection. The default is `nil`.
         /// - Throws: `RedisConnection.Configuration.ValidationError` if invalid arguments are provided.
         public init(
             address: SocketAddress,
             password: String? = nil,
             initialDatabase: Int? = nil,
-            defaultLogger: Logger? = nil
+            defaultLogger: Logger? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
         ) throws {
             try self.init(
                 address: address,
                 username: nil,
                 password: password,
                 initialDatabase: initialDatabase,
-                defaultLogger: defaultLogger
+                defaultLogger: defaultLogger,
+                tlsConfiguration: tlsConfiguration
             )
         }
 
@@ -123,6 +132,7 @@ extension RedisConnection {
         ///     Redis by default opens connections against index `0`, so only set this value if the desired default is not `0`.
         ///     - defaultLogger: The optional prototype logger to use as the default logger instance when generating logs from the connection.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
+        ///     - `tlsConfiguration`: The optional TLS configuration to use for the connection. The default is `nil`.
         /// - Throws:
         ///     - `NIO.SocketAddressError` if hostname resolution fails.
         ///     - `RedisConnection.Configuration.ValidationError` if invalid arguments are provided.
@@ -131,13 +141,15 @@ extension RedisConnection {
             port: Int = Self.defaultPort,
             password: String? = nil,
             initialDatabase: Int? = nil,
-            defaultLogger: Logger? = nil
+            defaultLogger: Logger? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
         ) throws {
             try self.init(
                 address: try .makeAddressResolvingHost(hostname, port: port),
                 password: password,
                 initialDatabase: initialDatabase,
-                defaultLogger: defaultLogger
+                defaultLogger: defaultLogger,
+                tlsConfiguration: tlsConfiguration
             )
         }
 
@@ -156,12 +168,13 @@ extension RedisConnection {
         ///     - string: The URL formatted string.
         ///     - defaultLogger: The optional prototype logger to use as the default logger instance when generating logs from the connection.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
+        ///     - `tlsConfiguration`: The optional TLS configuration to use for the connection. The default is `nil`.
         /// - Throws:
         ///     - `RedisConnection.Configuration.ValidationError` if required URL components are invalid or missing.
         ///     - `NIO.SocketAddressError` if hostname resolution fails.
-        public init(url string: String, defaultLogger: Logger? = nil) throws {
+        public init(url string: String, defaultLogger: Logger? = nil, tlsConfiguration: TLSConfiguration? = nil) throws {
             guard let url = URL(string: string) else { throw ValidationError.invalidURLString }
-            try self.init(url: url, defaultLogger: defaultLogger)
+            try self.init(url: url, defaultLogger: defaultLogger, tlsConfiguration: tlsConfiguration)
         }
 
         /// Creates a new connection configuration from the provided URL object.
@@ -176,10 +189,15 @@ extension RedisConnection {
         ///     - url: The URL to use to resolve and authenticate the remote connection.
         ///     - defaultLogger: The optional prototype logger to use as the default logger instance when generating logs from the connection.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
+        ///     - `tlsConfiguration`: The optional TLS configuration to use for the connection. The default is `nil`.
         /// - Throws:
         ///     - `RedisConnection.Configuration.ValidationError` if required URL components are invalid or missing.
         ///     - `NIO.SocketAddressError` if hostname resolution fails.
-        public init(url: URL, defaultLogger: Logger? = nil) throws {
+        public init(
+            url: URL,
+            defaultLogger: Logger? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
+        ) throws {
             try Self.validateRedisURL(url)
 
             guard let host = url.host, !host.isEmpty else { throw ValidationError.missingURLHost }
@@ -190,7 +208,10 @@ extension RedisConnection {
                 address: try .makeAddressResolvingHost(host, port: url.port ?? Self.defaultPort),
                 password: url.password,
                 initialDatabase: databaseID,
-                defaultLogger: defaultLogger
+                defaultLogger: defaultLogger,
+                tlsConfiguration: url.scheme == "rediss" 
+                   ? tlsConfiguration ?? .makeClientConfiguration()
+                   : tlsConfiguration
             )
         }
 
@@ -199,8 +220,6 @@ extension RedisConnection {
                 let scheme = url.scheme,
                 !scheme.isEmpty
             else { throw ValidationError.missingURLScheme }
-
-            guard scheme == "redis" else { throw ValidationError.invalidURLScheme }
         }
     }
 }

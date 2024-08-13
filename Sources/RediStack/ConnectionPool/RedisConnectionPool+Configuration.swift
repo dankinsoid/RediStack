@@ -14,6 +14,7 @@
 
 import NIOCore
 import NIOPosix
+import NIOSSL
 import Logging
 
 extension RedisConnectionPool {
@@ -26,6 +27,7 @@ extension RedisConnectionPool {
         /// The username used to authenticate connections.
         /// - Warning: This property should only be provided if you are running against Redis 6 or higher.
         public let connectionUsername: String?
+        public let tlsConfiguration: TLSConfiguration?
         /// The password used to authenticate connections.
         public let connectionPassword: String?
         /// The initial database index that connections should use.
@@ -41,18 +43,21 @@ extension RedisConnectionPool {
         ///     - connectionDefaultLogger: The optional prototype logger to use as the default logger instance when generating logs from connections.
         ///     If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
         ///     - tcpClient: If you have chosen to configure a `NIO.ClientBootstrap` yourself, this will be used instead of the `.makeRedisTCPClient` factory instance.
+        ///     - tlsConfiguration: The optional TLS configuration to use when establishing connections.
         public init(
             connectionInitialDatabase: Int? = nil,
             connectionPassword: String? = nil,
             connectionDefaultLogger: Logger? = nil,
-            tcpClient: ClientBootstrap? = nil
+            tcpClient: ClientBootstrap? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
         ) {
             self.init(
                 connectionInitialDatabase: connectionInitialDatabase,
                 connectionUsername: nil,
                 connectionPassword: connectionPassword,
                 connectionDefaultLogger: connectionDefaultLogger,
-                tcpClient: tcpClient
+                tcpClient: tcpClient,
+                tlsConfiguration: tlsConfiguration
             )
         }
 
@@ -65,18 +70,21 @@ extension RedisConnectionPool {
         ///     - connectionDefaultLogger: The optional prototype logger to use as the default logger instance when generating logs from connections.
         ///       If one is not provided, one will be generated. See `RedisLogging.baseConnectionLogger`.
         ///     - tcpClient: If you have chosen to configure a `NIO.ClientBootstrap` yourself, this will be used instead of the `.makeRedisTCPClient` factory instance.
+        ///     - tlsConfiguration: The optional TLS configuration to use when establishing connections.
         public init(
             connectionInitialDatabase: Int? = nil,
             connectionUsername: String? = nil,
             connectionPassword: String? = nil,
             connectionDefaultLogger: Logger? = nil,
-            tcpClient: ClientBootstrap? = nil
+            tcpClient: ClientBootstrap? = nil,
+            tlsConfiguration: TLSConfiguration? = nil
         ) {
             self.connectionInitialDatabase = connectionInitialDatabase
             self.connectionUsername = connectionUsername
             self.connectionPassword = connectionPassword
             self.connectionDefaultLogger = connectionDefaultLogger ?? RedisConnection.Configuration.defaultLogger
             self.tcpClient = tcpClient
+            self.tlsConfiguration = tlsConfiguration
         }
     }
 
