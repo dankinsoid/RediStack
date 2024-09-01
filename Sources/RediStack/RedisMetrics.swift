@@ -63,6 +63,13 @@ public struct RedisMetrics {
     /// is first sent through the `NIO.Channel`, to when the response is first resolved.
     public static let commandRoundTripTime = Timer(label: .commandRoundTripTime)
 
+    /// A flag to enable or disable the reporting of metrics.
+    public static var reportMetrics: Bool {
+        get { return _reportMetrics.load(ordering: .relaxed) }
+        set { _reportMetrics.store(newValue, ordering: .relaxed) }
+    }
+    private static let _reportMetrics = ManagedAtomic<Bool>(true)
+
     private init() { }
 }
 
@@ -82,6 +89,7 @@ extension RedisMetrics {
         /// Increments the current count by the amount specified.
         /// - Parameter amount: The number to increase the current count by. Default is `1`.
         public func increment(by amount: Int = 1) {
+            guard RedisMetrics.reportMetrics else { return }
             self.count.wrappingIncrement(by: amount, ordering: .sequentiallyConsistent)
             self.gauge.record(self.count.load(ordering: .sequentiallyConsistent))
         }
@@ -89,14 +97,55 @@ extension RedisMetrics {
         /// Decrements the current count by the amount specified.
         /// - Parameter amount: The number to decrease the current count by. Default is `1`.
         public func decrement(by amount: Int = 1) {
+            guard RedisMetrics.reportMetrics else { return }
             self.count.wrappingDecrement(by: amount, ordering: .sequentiallyConsistent)
             self.gauge.record(self.count.load(ordering: .sequentiallyConsistent))
         }
         
         /// Resets the current count to `0`.
         public func reset() {
+            guard RedisMetrics.reportMetrics else { return }
             _ = self.count.exchange(0, ordering: .sequentiallyConsistent)
             self.gauge.record(self.count.load(ordering: .sequentiallyConsistent))
+        }
+    }
+    
+    fileprivate final class _Counter: CounterHandler {
+
+        let handler: CounterHandler
+    
+        init(label: Label) {
+            self.handler = MetricsSystem.factory.makeCounter(
+                label: label.description,
+                dimensions: []
+            )
+        }
+        
+        func increment(by value: Int64) {
+            guard RedisMetrics.reportMetrics else { return }
+            handler.increment(by: value)
+        }
+        
+        func reset() {
+            guard RedisMetrics.reportMetrics else { return }
+            handler.reset()
+        }
+    }
+
+    fileprivate final class _Timer: TimerHandler {
+
+        let handler: TimerHandler
+
+        init(label: Label) {
+            self.handler = MetricsSystem.factory.makeTimer(
+                label: label.description,
+                dimensions: []
+            )
+        }
+
+        func recordNanoseconds(_ duration: Int64) {
+            guard RedisMetrics.reportMetrics else { return }
+            handler.recordNanoseconds(duration)
         }
     }
 }
@@ -106,7 +155,11 @@ extension RedisMetrics {
 extension Metrics.Counter {
     @inline(__always)
     convenience init(label: RedisMetrics.Label) {
-        self.init(label: label.description)
+        self.init(
+            label: label.description,
+            dimensions: [],
+            handler: RedisMetrics._Counter(label: label)
+        )
     }
 }
 
@@ -120,6 +173,10 @@ extension Metrics.Gauge {
 extension Metrics.Timer {
     @inline(__always)
     convenience init(label: RedisMetrics.Label) {
-        self.init(label: label.description)
+        self.init(
+            label: label.description,
+            dimensions: [],
+            handler: RedisMetrics._Timer(label: label)
+        )
     }
 }
