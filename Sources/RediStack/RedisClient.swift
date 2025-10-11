@@ -25,7 +25,7 @@ import NIOCore
 ///     // result == EventLoopFuture<RESPValue>
 ///
 /// For the full list of available commands, see [https://redis.io/commands](https://redis.io/commands)
-public protocol RedisClient {
+public protocol RedisClient: Sendable {
     /// The `NIO.EventLoop` that this client operates on.
     var eventLoop: EventLoop { get }
 

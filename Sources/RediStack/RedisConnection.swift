@@ -92,7 +92,7 @@ extension RedisConnection {
 ///     print(result) // Optional("some value")
 ///
 /// Note: `wait()` is used in the example for simplicity. Never call `wait()` on an event loop.
-public final class RedisConnection: RedisClient, RedisClientWithUserContext {
+public final class RedisConnection: @unchecked Sendable, RedisClient, RedisClientWithUserContext {
     /// A unique identifer to represent this connection.
     public let id = UUID()
     public var eventLoop: EventLoop { return self.channel.eventLoop }
@@ -140,7 +140,12 @@ public final class RedisConnection: RedisClient, RedisClientWithUserContext {
     /// A closure to invoke when the connection closes unexpectedly.
     ///
     /// An unexpected closure is when the connection is closed by any other method than by calling `close(logger:)`.
-    public var onUnexpectedClosure: (() -> Void)?
+    public var onUnexpectedClosure: (@Sendable () -> Void)? {
+        get { return self._onUnexpectedClosurelock.withLock { self._onUnexpectedClosure } }
+        set { self._onUnexpectedClosurelock.withLockVoid { self._onUnexpectedClosure = newValue } }
+    }
+    private let _onUnexpectedClosurelock = NIOLock()
+    private var _onUnexpectedClosure: (@Sendable () -> Void)?
 
     internal let channel: Channel
     private let backgroundLogger: Logger
