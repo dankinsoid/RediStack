@@ -92,7 +92,7 @@ extension RedisConnection {
 ///     print(result) // Optional("some value")
 ///
 /// Note: `wait()` is used in the example for simplicity. Never call `wait()` on an event loop.
-public final class RedisConnection: RedisPipelineClient, RedisClientWithUserContext {
+public final class RedisConnection: RedisClient, RedisClientWithUserContext {
     /// A unique identifer to represent this connection.
     public let id = UUID()
     public var eventLoop: EventLoop { return self.channel.eventLoop }
@@ -247,17 +247,6 @@ extension RedisConnection {
     ///     If a `RedisError` is returned, the future will be failed instead.
     public func send(command: String, with arguments: [RESPValue]) -> EventLoopFuture<RESPValue> {
         return self.send(commands: [(command, arguments)], logger: nil)
-    }
-
-    /// Sends multiple commands  in a pipeline to Redis.
-    ///
-    /// See `RedisClient.send(commands:)`.
-    /// - Note: The timing of when commands are actually sent to Redis can be controlled with the `RedisConnection.sendCommandsImmediately` property.
-    /// - Returns: A `NIO.EventLoopFuture` that resolves with the command's result stored in a `RESPValue`.
-    ///     If a `RedisError` is returned, the future will be failed instead.
-    public func send<T>(_ command: T) -> EventLoopFuture<T.Value> where T : RedisCommandSignature {
-        return self.send(commands: command.commands, logger: nil)
-            .flatMapThrowing(command.makeResponse)
     }
 
     internal func send(

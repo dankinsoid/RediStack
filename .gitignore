@@ -23,6 +23,7 @@ xcuserdata/
 *.xccheckout
 *.xcscmblueprint
 *.xcodeproj
+.DS_Store
 public/
 
 ## Obj-C/Swift specific
